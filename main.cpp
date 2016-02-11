@@ -9,15 +9,18 @@ int main(int argc, char *argv[])
     settings["MaxThread"]=7;
     settings.LoadSettings();
     ReloadConfig();
-    if(!server.launch(12345)) return 0;
+    serverd.MinThread = MinThreadd;
+    serverd.MaxThread = MaxThreadd;
+    if(!serverd.launch(12345)) return 0;
     else {
         db=QSqlDatabase::addDatabase("QMYSQL");
         db.setDatabaseName("s1user");
         db.setHostName("localhost");
         db.setPassword("passwd");
         db.setUserName("Qt5");
-        if(!db.open()) qDebug() << "Connect not open "+db.lastError().text();
-        logs << "Mysql connected";
+        if(!db.open())
+            qDebug() << "Connect not open "+db.lastError().text();
+        qDebug() << "Mysql connected";
         return a.exec();
     }
     /*QSqlDatabase test=QSqlDatabase::addDatabase("QMYSQL");
