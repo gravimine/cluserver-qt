@@ -38,9 +38,16 @@ class MainServer : public ATCPServer
 {
     Q_OBJECT
 public:
-    void UseCommand(ArrayCommand sCommand, validClient* lClient, int mClientID);
+    MainServer();
+    ~MainServer();
+    void UseCommand(ArrayCommand sCommand, validClient* lClient, int mClientID, ServerThread *thisThread);
     virtual validClient* NewValidClient();
     virtual void DelValidClient(validClient* h);
+    QTimer* timer;
+public slots:
+    void MonitorTimer();
+protected:
+
 };
 void ReloadConfig();
 extern MainServer serverd;

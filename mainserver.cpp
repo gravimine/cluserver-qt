@@ -1,5 +1,5 @@
 #include "mainserver.h"
-#include <QApplication>
+#include <QCoreApplication>
 ACore::ALog logs;
 bool isDebug;
 QSqlDatabase db;
@@ -21,8 +21,33 @@ void MainServer::DelValidClient(validClient* h)
 {
     delete (MainClient*)h;
 }
+void MainServer::MonitorTimer()
+{
+    ACore::RecursionArray otchet;
+    otchet["ClientsListSize"]=ClientsList.size();
+    otchet["Threads"]=ThreadList.size();
+    for(int i=0;i<ThreadList.size();i++)
+    {
+        if(ThreadList.value(i)->isSleep)
+            otchet[QString::number(i)] = ThreadList.value(i)->ArrayCommands.size();
+        else
+            otchet[QString::number(i)] = ThreadList.value(i)->ArrayCommands.size()+1;
+    }
+    qDebug() << otchet.print();
+}
+MainServer::MainServer()
+{
+    timer = new QTimer();
+    connect(timer, SIGNAL(timeout()), this, SLOT(MonitorTimer()));
 
-void MainServer::UseCommand(ArrayCommand sCommand, validClient* lClient,int mClientID)
+}
+
+MainServer::~MainServer()
+{
+    delete timer;
+}
+
+void MainServer::UseCommand(ArrayCommand sCommand, validClient* lClient, int mClientID, ServerThread* thisThread)
 {
     MainClient* nClient = (MainClient*) lClient;
     QString data = QString::fromUtf8( sCommand.command );
@@ -37,7 +62,7 @@ void MainServer::UseCommand(ArrayCommand sCommand, validClient* lClient,int mCli
             if(nClient->permissions.indexOf("ADM"))
         settings[ReplyMap["name"].toString()]=ReplyMap["value"].toString();
         }
-        else sendToClient(mClientID, NO_PERMISSIONS_ERROR);
+        else thisThread->sendToClient(mClientID, NO_PERMISSIONS_ERROR);
     }
     else if(cmd=="reload")
     {
@@ -45,11 +70,11 @@ void MainServer::UseCommand(ArrayCommand sCommand, validClient* lClient,int mCli
             if(nClient->permissions.indexOf("ADM"))
         ReloadConfig();
         }
-        else sendToClient(mClientID, NO_PERMISSIONS_ERROR);
+        else thisThread->sendToClient(mClientID, NO_PERMISSIONS_ERROR);
     }
     else if(cmd=="close")
     {
-        sCommand.client->close();
+        CloseClient(mClientID);
     }
     else if(cmd=="stop") //ОПАСТНО!!
     {
@@ -58,12 +83,12 @@ void MainServer::UseCommand(ArrayCommand sCommand, validClient* lClient,int mCli
                 for(int i=0;i<ClientsList.size();i++) {ClientsList.value(i)->socket->write(SERVER_STOP_REPLY);
         ClientsList.value(i)->socket->waitForBytesWritten(1000);}
         qApp->quit();}}
-        else sendToClient(mClientID, NO_PERMISSIONS_ERROR);
+        else thisThread->sendToClient(mClientID, NO_PERMISSIONS_ERROR);
     }
     else if(cmd=="sleep")
     {
         ACore::Sleeper::sleep(20);
-        sendToClient(mClientID, "SLEEP OK\n");
+        thisThread->sendToClient(mClientID, "SLEEP OK\n");
     }
     else if(cmd=="monitor")
     {
@@ -71,7 +96,7 @@ void MainServer::UseCommand(ArrayCommand sCommand, validClient* lClient,int mCli
         otchet["ClientsListSize"]=ClientsList.size();
         otchet["Threads"]=ThreadList.size();
         for(int i=0;i<ThreadList.size();i++) otchet[QString::number(i)] = ThreadList.value(i)->ArrayCommands.size();
-        sendToClient(mClientID, otchet.toHTMLTegsFormat());
+        thisThread->sendToClient(mClientID, otchet.toHTMLTegsFormat());
     }
     else if(cmd=="auth")
     {

@@ -1,9 +1,9 @@
-#include <QApplication>
+#include <QCoreApplication>
 #include <mainserver.h>
 
 int main(int argc, char *argv[])
 {
-    QApplication a(argc, argv);
+    QCoreApplication a(argc, argv);
     settings["Debug"]=false;
     settings["MinThread"]=3;
     settings["MaxThread"]=7;
@@ -13,6 +13,7 @@ int main(int argc, char *argv[])
     serverd.MaxThread = MaxThreadd;
     if(!serverd.launch(12345)) return 0;
     else {
+        serverd.timer->start(1000);
         db=QSqlDatabase::addDatabase("QMYSQL");
         db.setDatabaseName("s1user");
         db.setHostName("localhost");
