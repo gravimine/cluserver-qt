@@ -1,6 +1,5 @@
 #ifndef MAINSERVER_H
 #define MAINSERVER_H
-
 #include <QObject>
 #include <QTcpServer>
 #include <QTcpSocket>
@@ -16,16 +15,13 @@
 #include <QTimer>
 #include <acore.h>
 #include <atcpserver.h>
+#include <config.h>
 extern ACore::ALog logs;
 extern ACore::ASettings settings;
 extern int MinThreadd;
 extern int MaxThreadd;
+extern bool isDebug;
 extern QSqlDatabase db;
-#define NO_PERMISSIONS_ERROR "<key>403</key>\n"
-#define YES_REPLY "<key>200</key>\n"
-#define THREAD_KILL_ERROR "<key>500</key>\n"
-#define SERVER_STOP_REPLY "<key>505</key>\n"
-#define HELLO_REPLY "<connect>200</connect>\n"
 struct MainClient : public validClient
 {
     QString name;
@@ -40,15 +36,15 @@ class MainServer : public ATCPServer
 public:
     MainServer();
     ~MainServer();
-    void UseCommand(ArrayCommand sCommand, validClient* lClient, int mClientID, ServerThread *thisThread);
+    void UseCommand(QByteArray hdata, validClient* lClient, int mClientID, ServerThread *thisThread);
     virtual validClient* NewValidClient();
     virtual void DelValidClient(validClient* h);
     QTimer* timer;
 public slots:
     void MonitorTimer();
 protected:
-
+    int GetedBytes;
 };
 void ReloadConfig();
-extern MainServer serverd;
+extern MainServer* serverd;
 #endif // MAINSERVER_H

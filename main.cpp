@@ -4,16 +4,22 @@
 int main(int argc, char *argv[])
 {
     QCoreApplication a(argc, argv);
+    serverd = new MainServer();
     settings["Debug"]=false;
     settings["MinThread"]=3;
     settings["MaxThread"]=7;
+    settings["Port"]=6592;
+    settings["Host"]="127.0.0.1";
+    settings["MaxCommandsInQuest"]=12;
     settings.LoadSettings();
     ReloadConfig();
-    serverd.MinThread = MinThreadd;
-    serverd.MaxThread = MaxThreadd;
-    if(!serverd.launch(12345)) return 0;
+    qDebug() << settings.print();
+    serverd->MinThread = MinThreadd;
+    serverd->MaxThread = MaxThreadd;
+    if(!serverd->launch(settings["Host"].toString(),settings["Port"].toInt())) return 0;
     else {
-        serverd.timer->start(1000);
+        qDebug() << "Host: " + settings["Host"].toString() + " Port: " + QString::number(settings["Port"].toInt());
+        if(isDebug) serverd->timer->start(1000);
         db=QSqlDatabase::addDatabase("QMYSQL");
         db.setDatabaseName("s1user");
         db.setHostName("localhost");
@@ -22,8 +28,12 @@ int main(int argc, char *argv[])
         if(!db.open())
             qDebug() << "Connect not open "+db.lastError().text();
         qDebug() << "Mysql connected";
-        return a.exec();
+        a.exec();
+
     }
+    delete serverd;
+    settings.SaveSettings();
+    return 0;
     /*QSqlDatabase test=QSqlDatabase::addDatabase("QMYSQL");
     test.setDatabaseName("test");
     test.setHostName("localhost");

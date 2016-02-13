@@ -17,6 +17,7 @@ SOURCES += main.cpp \
     mainserver.cpp
 
 HEADERS  += \
-    mainserver.h
+    mainserver.h \
+    config.h
 
 FORMS    +=
