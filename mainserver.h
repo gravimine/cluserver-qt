@@ -16,6 +16,7 @@
 #include <acore.h>
 #include <atcpserver.h>
 #include <config.h>
+#include "aipfunc.h"
 extern ACore::ALog logs;
 extern ACore::ASettings settings;
 extern int MinThreadd;
@@ -26,8 +27,17 @@ struct MainClient : public validClient
 {
     QString name;
     QString pass;
-    int id;
+    int id,achived;
     QStringList permissions;
+    QString RegIP,init,initV,TimeZone,ShowName,status,email,prefix,colored,real_name;
+};
+
+struct Room
+{
+    int id;
+    QString name;
+    int creater;
+    QList<int> userslist;
 };
 
 class MainServer : public ATCPServer
@@ -43,7 +53,7 @@ public:
 public slots:
     void MonitorTimer();
 protected:
-    int GetedBytes;
+    long int GetedBytes;
 };
 void ReloadConfig();
 extern MainServer* serverd;

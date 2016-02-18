@@ -1,6 +1,6 @@
 #include <QCoreApplication>
 #include <mainserver.h>
-
+#include "aipfunc.h"
 int main(int argc, char *argv[])
 {
     QCoreApplication a(argc, argv);
@@ -8,16 +8,34 @@ int main(int argc, char *argv[])
     settings["Debug"]=false;
     settings["MinThread"]=3;
     settings["MaxThread"]=7;
+    settings["AllowSRC"]=3;
+    //0 - Запрещен
+    //1 - Только администраторам(отправка)
+    //2 - только отправка(всем)
+    //3 - Прием, и отправка только администраторам
+    //4 - Прием и отправка
+    //5 - Только прием
     settings["Port"]=6592;
-    settings["Host"]="127.0.0.1";
+    settings["Host"]="192.168.1.43";
+    settings["ServerName"]="localhostServer";
+    settings["ServerInfo"]="Еще один сервер.";
     settings["MaxCommandsInQuest"]=12;
     settings.LoadSettings();
     ReloadConfig();
     qDebug() << settings.print();
+    logs.SetCoutDebug(true);
     serverd->MinThread = MinThreadd;
     serverd->MaxThread = MaxThreadd;
-    if(!serverd->launch(settings["Host"].toString(),settings["Port"].toInt())) return 0;
-    else {
+    //Парс стандартного сообщения при подключении клиента
+    ACore::RecursionArray arr;
+    arr["version"]=SERVER_VERSION;
+    arr["engine"]=SERVER_ENGINE;
+    arr["name"]=settings["ServerName"].toString();
+    arr["info"]=settings["ServerInfo"].toString();
+    serverd->ClientInConnectText = arr.toHTMLTegsFormat();
+    //END
+    if(serverd->launch( QHostAddress(settings["Host"].toString() )  ,settings["Port"].toInt()))
+    {
         qDebug() << "Host: " + settings["Host"].toString() + " Port: " + QString::number(settings["Port"].toInt());
         if(isDebug) serverd->timer->start(1000);
         db=QSqlDatabase::addDatabase("QMYSQL");
