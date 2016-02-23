@@ -21,6 +21,7 @@ extern ACore::ALog logs;
 extern ACore::ASettings settings;
 extern int MinThreadd;
 extern int MaxThreadd;
+extern int SRCMode;
 extern bool isDebug;
 extern QSqlDatabase db;
 struct MainClient : public validClient

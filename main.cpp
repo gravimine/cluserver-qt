@@ -19,6 +19,12 @@ int main(int argc, char *argv[])
     settings["Host"]="192.168.1.43";
     settings["ServerName"]="localhostServer";
     settings["ServerInfo"]="Еще один сервер.";
+    settings["MySqlHost"]="localhost";
+    settings["MySqlPort"]=3306;
+    settings["MySqlUser"]="Qt5";
+    settings["MySqlDriver"]="QMYSQL";
+    settings["MySqlDatabase"]="s1user";
+    settings["MySqlPass"]="passwd";
     settings["MaxCommandsInQuest"]=12;
     settings.LoadSettings();
     ReloadConfig();
@@ -33,19 +39,29 @@ int main(int argc, char *argv[])
     arr["name"]=settings["ServerName"].toString();
     arr["info"]=settings["ServerInfo"].toString();
     serverd->ClientInConnectText = arr.toHTMLTegsFormat();
-    //END
-    if(serverd->launch( QHostAddress(settings["Host"].toString() )  ,settings["Port"].toInt()))
+    QString thishost = settings["Host"].toString();
+    int thisport = settings["Port"].toInt();
+    if(a.arguments().size()>2)
     {
-        qDebug() << "Host: " + settings["Host"].toString() + " Port: " + QString::number(settings["Port"].toInt());
+        thishost = a.arguments().value(1);
+        thisport = a.arguments().value(2).toInt();
+        if(thisport<0 || thisport > 65535) logs << "Warning: port unvalid!";
+    }
+    //END
+    if(serverd->launch( QHostAddress(thishost )  ,thisport))
+    {
+        qDebug() << "Host: " + thishost + " Port: " + QString::number(thisport);
         if(isDebug) serverd->timer->start(1000);
-        db=QSqlDatabase::addDatabase("QMYSQL");
-        db.setDatabaseName("s1user");
-        db.setHostName("localhost");
-        db.setPassword("passwd");
-        db.setUserName("Qt5");
+        db=QSqlDatabase::addDatabase(settings["MySqlDriver"].toString());
+        db.setDatabaseName(settings["MySqlDatabase"].toString());
+        db.setHostName(settings["MySqlHost"].toString());
+        db.setPassword(settings["MySqlPass"].toString());
+        db.setUserName(settings["MySqlUser"].toString());
+        db.setPort(settings["MySqlPort"].toInt());
         if(!db.open())
-            qDebug() << "Connect not open "+db.lastError().text();
-        qDebug() << "Mysql connected";
+            logs << "Mysql connect .. failed. Error: "+db.lastError().text();
+        else
+            logs << "Mysql connected .. done";
         a.exec();
 
     }
