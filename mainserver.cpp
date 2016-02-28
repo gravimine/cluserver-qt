@@ -54,24 +54,13 @@ MainServer::~MainServer()
     delete timer;
 }
 
-void MainServer::UseCommand(QByteArray hdata, validClient* lClient, int mClientID, ServerThread* thisThread)
+void MainServer::UseCommand(QByteArray hdata, validClient* lClient, QLinkedList<validClient*>::iterator mClientID, ServerThread* thisThread)
 {
-    QStringList dataList;
-    GetedBytes +=hdata.size();
-    logs << hdata;
-    if(MaxCommandsInQuest>0) {
-        dataList = QString::fromUtf8( hdata ).split("\n\n");
-        if(dataList.size()>MaxCommandsInQuest) SEND_CLIENT( BAD_REQUEST_REPLY);
-    }
-    else dataList << QString::fromUtf8( hdata );
-    for(int lstd=0;lstd<dataList.size();lstd++){
-
     MainClient* nClient = (MainClient*) lClient;
-    QString data = dataList.value(lstd);
     //data = data.replace("\r","");
     //data = data.replace("\n","");
     RecursionArray ReplyMap;
-    ReplyMap.fromPostGetFormat(data);
+    ReplyMap.fromPostGetFormat(hdata);
     //if(isDebug) qDebug() << ReplyMap.print();
     QString cmd=ReplyMap["type"].toString();
     if(cmd=="set")
@@ -107,7 +96,7 @@ void MainServer::UseCommand(QByteArray hdata, validClient* lClient, int mClientI
     }
     else if(cmd=="close")
     {
-        CloseClient(mClientID);
+        CloseClient(lClient);
     }
     else if(cmd=="test")
     {
@@ -117,8 +106,11 @@ void MainServer::UseCommand(QByteArray hdata, validClient* lClient, int mClientI
     {
         if(nClient->isAuth){
             if(IS_ADMIN){
-                for(int i=0;i<ClientsList.size();i++) {ClientsList.value(i)->socket->write(SERVER_STOP_REPLY);
-                ClientsList.value(i)->socket->waitForBytesWritten(1000);}
+                for(QLinkedList<validClient*>::iterator i=ClientsList.begin();i!=ClientsList.end();i++)
+                {
+                    (*i)->socket->write(SERVER_STOP_REPLY);
+                    (*i)->socket->waitForBytesWritten(1000);
+                }
                 qApp->quit();
             }
             else SEND_CLIENT(NO_PERMISSIONS_ERROR);
@@ -129,8 +121,11 @@ void MainServer::UseCommand(QByteArray hdata, validClient* lClient, int mClientI
     {
         if(nClient->isAuth){
             if(IS_ADMIN){
-                for(int i=0;i<ClientsList.size();i++) {ClientsList.value(i)->socket->write(THREAD_KILL_ERROR);
-                ClientsList.value(i)->socket->waitForBytesWritten(1000); CloseClient(i);}
+                for(QLinkedList<validClient*>::iterator i=ClientsList.begin();i!=ClientsList.end();i++)
+                {
+                    (*i)->socket->write(THREAD_KILL_ERROR);
+                    (*i)->socket->waitForBytesWritten(1000); CloseClient((*i));
+                }
             }
             else SEND_CLIENT(NO_PERMISSIONS_ERROR);
         }
@@ -263,7 +258,7 @@ void MainServer::UseCommand(QByteArray hdata, validClient* lClient, int mClientI
             SEND_CLIENT(NO_PERMISSIONS_ERROR);
             return;
         }
-        if(SRCMode = 3 || SRCMode == 1)
+        if(SRCMode == 3 || SRCMode == 1)
         {
             if(!IS_ADMIN)
             {
@@ -305,9 +300,9 @@ void MainServer::UseCommand(QByteArray hdata, validClient* lClient, int mClientI
                 for(int i=0;i<idsList.size();i++)
                 {
                     bool isActive=false;
-                    for(int j=0;j<ClientsList.size();j++)
+                    for(QLinkedList<validClient*>::iterator j=ClientsList.begin();j!=ClientsList.end();j++)
                     {
-                        MainClient* s = (MainClient*)ClientsList.value(j);
+                        MainClient* s = (MainClient*)(*j);
                         if(s->id==idsList.value(i).toInt()){isActive=true;
                         }
                     }
@@ -342,20 +337,16 @@ void MainServer::UseCommand(QByteArray hdata, validClient* lClient, int mClientI
     else if(cmd=="su")
     {
         if(SUPERUSER_AVALIBLE){
-        MainClient* newClient = new MainClient();
-        newClient->isAuth=true;
-        newClient->name=SUPERUSER_LOGIN;
-        newClient->pass=SUPERUSER_PASS;
+        nClient->isAuth=true;
+        nClient->name=SUPERUSER_LOGIN;
+        nClient->pass=SUPERUSER_PASS;
         QString str = SUPERUSER_PERMISSIONS;
-        newClient->permissions=str.split(", ");
-        newClient->socket=nClient->socket;
-        newClient->isUseCommand = false;
-        newClient->state = AuthState;
-        newClient->numUsingCommands = nClient->numUsingCommands;
-        newClient->id=SUPERUSER_ID;
-        delete ClientsList[mClientID];
-        ClientsList.removeAt(mClientID);
-        ClientsList << (validClient*) newClient;
+        nClient->permissions=str.split(", ");
+        nClient->socket=nClient->socket;
+        nClient->isUseCommand = false;
+        nClient->state = AuthState;
+        nClient->numUsingCommands = nClient->numUsingCommands;
+        nClient->id=SUPERUSER_ID;
         logs << "Client logged in superuser!";
         SEND_CLIENT(YES_REPLY);}
         else
@@ -376,33 +367,28 @@ void MainServer::UseCommand(QByteArray hdata, validClient* lClient, int mClientI
                 return;
             }
             sqlquery.next();
-            MainClient* newClient = new MainClient();
-            newClient->isAuth=true;
-            newClient->name=ReplyMap["login"].toString();
-            newClient->pass=ReplyMap["pass"].toString();
+            nClient->isAuth=true;
+            nClient->name=ReplyMap["login"].toString();
+            nClient->pass=ReplyMap["pass"].toString();
             QString str = sqlquery.value("group").toString();
-            newClient->permissions=str.split(", ");
-            newClient->socket=nClient->socket;
-            newClient->isUseCommand = false;
-            newClient->state = AuthState;
-            newClient->numUsingCommands = nClient->numUsingCommands;
-            newClient->id=sqlquery.value("id").toInt();
-            newClient->init=sqlquery.value("init").toString();
-            newClient->initV=sqlquery.value("initV").toString();
-            newClient->status=sqlquery.value("status").toString();
-            newClient->real_name=sqlquery.value("nickname").toString();
-            newClient->prefix=sqlquery.value("prefix").toString();
-            newClient->email=sqlquery.value("email").toString();
-            newClient->TimeZone=sqlquery.value("TimeZone").toString();
-            newClient->colored=sqlquery.value("colored").toString();
-            newClient->RegIP=sqlquery.value("IP_REG").toString();
-            newClient->achived=sqlquery.value("HAID").toInt();
-            delete ClientsList[mClientID];
-            ClientsList.removeAt(mClientID);
-            ClientsList << (validClient*) newClient;
-            logs << newClient->name +" auth";
+            nClient->permissions=str.split(", ");
+            nClient->socket=nClient->socket;
+            nClient->isUseCommand = false;
+            nClient->state = AuthState;
+            nClient->numUsingCommands = nClient->numUsingCommands;
+            nClient->id=sqlquery.value("id").toInt();
+            nClient->init=sqlquery.value("init").toString();
+            nClient->initV=sqlquery.value("initV").toString();
+            nClient->status=sqlquery.value("status").toString();
+            nClient->real_name=sqlquery.value("nickname").toString();
+            nClient->prefix=sqlquery.value("prefix").toString();
+            nClient->email=sqlquery.value("email").toString();
+            nClient->TimeZone=sqlquery.value("TimeZone").toString();
+            nClient->colored=sqlquery.value("colored").toString();
+            nClient->RegIP=sqlquery.value("IP_REG").toString();
+            nClient->achived=sqlquery.value("HAID").toInt();
+            logs << nClient->name +" auth";
             SEND_CLIENT(YES_REPLY);
         }
-    }
     }
 }

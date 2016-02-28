@@ -15,7 +15,7 @@
 #define SQL_ERROR "<key>501</key>"
 #define AUTH_ERROR "<key>402</key><error>NoFoundLoginAndPass</error>"
 //Не трогать
-#define SEND_CLIENT(n) thisThread->sendToClient(mClientID, n)
+#define SEND_CLIENT(n) thisThread->sendToClient(lClient, n)
 #define IS_ADMIN (nClient->permissions.contains("ADM"))
 #define IS_AUTH (nClient->isAuth)
 //Версии

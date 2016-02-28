@@ -51,7 +51,7 @@ int main(int argc, char *argv[])
     if(serverd->launch( QHostAddress(thishost )  ,thisport))
     {
         qDebug() << "Host: " + thishost + " Port: " + QString::number(thisport);
-        if(isDebug) serverd->timer->start(1000);
+        serverd->timer->start(1000);
         db=QSqlDatabase::addDatabase(settings["MySqlDriver"].toString());
         db.setDatabaseName(settings["MySqlDatabase"].toString());
         db.setHostName(settings["MySqlHost"].toString());
