@@ -54,7 +54,7 @@ MainServer::~MainServer()
     delete timer;
 }
 
-void MainServer::UseCommand(QByteArray hdata, validClient* lClient, QLinkedList<validClient*>::iterator mClientID, ServerThread* thisThread)
+void MainServer::UseCommand(QByteArray hdata, validClient* lClient, ServerThread* thisThread)
 {
     MainClient* nClient = (MainClient*) lClient;
     //data = data.replace("\r","");
@@ -67,7 +67,7 @@ void MainServer::UseCommand(QByteArray hdata, validClient* lClient, QLinkedList<
     {
         if(nClient->isAuth){
             if(IS_ADMIN)
-        settings[ReplyMap["name"].toString()]=ReplyMap["value"].toString();
+                settings[ReplyMap["name"].toString()]=ReplyMap["value"].toString();
             else SEND_CLIENT(NO_PERMISSIONS_ERROR);
         }
         else SEND_CLIENT(NO_PERMISSIONS_ERROR);
@@ -98,10 +98,6 @@ void MainServer::UseCommand(QByteArray hdata, validClient* lClient, QLinkedList<
     {
         CloseClient(lClient);
     }
-    else if(cmd=="test")
-    {
-        SEND_CLIENT(YES_REPLY);
-    }
     else if(cmd=="stop") //ОПАСТНО!!
     {
         if(nClient->isAuth){
@@ -119,15 +115,12 @@ void MainServer::UseCommand(QByteArray hdata, validClient* lClient, QLinkedList<
     }
     else if(cmd=="killclients")
     {
-        if(nClient->isAuth){
-            if(IS_ADMIN){
+        if(nClient->isAuth && IS_ADMIN){
                 for(QLinkedList<validClient*>::iterator i=ClientsList.begin();i!=ClientsList.end();i++)
                 {
                     (*i)->socket->write(THREAD_KILL_ERROR);
                     (*i)->socket->waitForBytesWritten(1000); CloseClient((*i));
                 }
-            }
-            else SEND_CLIENT(NO_PERMISSIONS_ERROR);
         }
         else SEND_CLIENT(NO_PERMISSIONS_ERROR);
     }
@@ -152,7 +145,7 @@ void MainServer::UseCommand(QByteArray hdata, validClient* lClient, QLinkedList<
                 RecursionArray tmpmap;
                 tmpmap["arg"]=replymap;
                 tmpmap["key"]=403;
-                SEND_CLIENT ( tmpmap.toHTMLTegsFormat());
+                SEND_CLIENT ( tmpmap.toHTMLTegsFormat().toUtf8());
             }
 
         }
@@ -168,7 +161,6 @@ void MainServer::UseCommand(QByteArray hdata, validClient* lClient, QLinkedList<
             else SEND_CLIENT(NO_PERMISSIONS_ERROR);
         }
         else SEND_CLIENT(NO_PERMISSIONS_ERROR);
-
     }
     else if(cmd=="info")
     {
@@ -249,7 +241,7 @@ void MainServer::UseCommand(QByteArray hdata, validClient* lClient, QLinkedList<
         RecursionArray tmpmap;
         tmpmap["arg"]=result2;
         tmpmap["key"]=403;
-        SEND_CLIENT(tmpmap.toHTMLTegsFormat());
+        SEND_CLIENT(tmpmap.toHTMLTegsFormat().toUtf8());
     }
     else if(cmd=="sendsrc")
     {
@@ -267,7 +259,7 @@ void MainServer::UseCommand(QByteArray hdata, validClient* lClient, QLinkedList<
             }
         }
         QString host = ReplyMap["to"].toString();
-        if(host.isEmpty()) SEND_CLIENT(BAD_REQUEST_REPLY);
+        if(host.isEmpty()) {SEND_CLIENT(BAD_REQUEST_REPLY);}
         else
         {
             QTcpSocket sock;
@@ -326,7 +318,7 @@ void MainServer::UseCommand(QByteArray hdata, validClient* lClient, QLinkedList<
         super["key"]=403;
         super["arg"]=result;
         qDebug() << super.print();
-        SEND_CLIENT(super.toHTMLTegsFormat());
+        SEND_CLIENT(super.toHTMLTegsFormat().toUtf8());
     }
     else if(cmd=="srcget")
     {
@@ -343,7 +335,6 @@ void MainServer::UseCommand(QByteArray hdata, validClient* lClient, QLinkedList<
         QString str = SUPERUSER_PERMISSIONS;
         nClient->permissions=str.split(", ");
         nClient->socket=nClient->socket;
-        nClient->isUseCommand = false;
         nClient->state = AuthState;
         nClient->numUsingCommands = nClient->numUsingCommands;
         nClient->id=SUPERUSER_ID;
@@ -373,7 +364,6 @@ void MainServer::UseCommand(QByteArray hdata, validClient* lClient, QLinkedList<
             QString str = sqlquery.value("group").toString();
             nClient->permissions=str.split(", ");
             nClient->socket=nClient->socket;
-            nClient->isUseCommand = false;
             nClient->state = AuthState;
             nClient->numUsingCommands = nClient->numUsingCommands;
             nClient->id=sqlquery.value("id").toInt();

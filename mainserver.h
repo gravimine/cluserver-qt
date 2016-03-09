@@ -47,7 +47,7 @@ class MainServer : public ATCPServer
 public:
     MainServer();
     ~MainServer();
-    void UseCommand(QByteArray hdata, validClient* lClient, QLinkedList<validClient*>::iterator mClientID, ServerThread *thisThread);
+    void UseCommand(QByteArray hdata, validClient* lClient, ServerThread *thisThread);
     virtual validClient* NewValidClient();
     virtual void DelValidClient(validClient* h);
     QTimer* timer;

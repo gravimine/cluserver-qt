@@ -4,7 +4,7 @@
 #define SUPERUSER_LOGIN "root"
 #define SUPERUSER_PASS "12345"
 #define SUPERUSER_PERMISSIONS "ADM, acc, ban"
-#define SUPERUSER_ID 1
+#define SUPERUSER_ID INT_MAX-1
 #define SUPERUSER_AVALIBLE true
 //Ответы сервера
 #define NO_PERMISSIONS_ERROR "<key>402</key><error>NoPermissions</error>"
@@ -15,7 +15,7 @@
 #define SQL_ERROR "<key>501</key>"
 #define AUTH_ERROR "<key>402</key><error>NoFoundLoginAndPass</error>"
 //Не трогать
-#define SEND_CLIENT(n) thisThread->sendToClient(lClient, n)
+#define SEND_CLIENT(n) lClient->numUsingCommands++; thisThread->sendToClient(lClient, n)
 #define IS_ADMIN (nClient->permissions.contains("ADM"))
 #define IS_AUTH (nClient->isAuth)
 //Версии
