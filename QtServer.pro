@@ -5,9 +5,10 @@
 #-------------------------------------------------
 
 QT       += core sql network
+QT       -= gui
 include(/home/gravit/code/aslib/ACore/ACore.pri)
 include(/home/gravit/code/aslib/ANetwork/ANetwork.pri)
-greaterThan(QT_MAJOR_VERSION, 4): QT += widgets
+#greaterThan(QT_MAJOR_VERSION, 4): QT += widgets
 
 TARGET = QtServer
 TEMPLATE = app

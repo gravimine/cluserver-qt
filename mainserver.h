@@ -31,6 +31,7 @@ struct MainClient : public validClient
     int id,achived;
     QStringList permissions;
     QString RegIP,init,initV,TimeZone,ShowName,status,email,prefix,colored,real_name;
+    QMap<int,int> msgmap;
 };
 
 struct Room

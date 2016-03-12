@@ -11,7 +11,7 @@
 #define YES_REPLY "<key>403</key>"
 #define THREAD_KILL_ERROR "<key>500</key>"
 #define SERVER_STOP_REPLY "<key>505</key>"
-#define BAD_REQUEST_REPLY "<key>402</key>"
+#define BAD_REQUEST_REPLY "<key>402</key><error>BadRequest</error>"
 #define SQL_ERROR "<key>501</key>"
 #define AUTH_ERROR "<key>402</key><error>NoFoundLoginAndPass</error>"
 //Не трогать

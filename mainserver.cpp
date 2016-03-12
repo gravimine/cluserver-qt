@@ -45,7 +45,7 @@ MainServer::MainServer()
 {
     timer = new QTimer();
     GetedBytes = 0;
-    connect(timer, SIGNAL(timeout()), this, SLOT(MonitorTimer()));
+    connect(timer, &QTimer::timeout, this, &MainServer::MonitorTimer);
 
 }
 
@@ -126,7 +126,9 @@ void MainServer::UseCommand(QByteArray hdata, validClient* lClient, ServerThread
     }
     else if(cmd=="rooms")
     {
-        if(nClient->isAuth){
+        if(!nClient->isAuth){
+        SEND_CLIENT(NO_PERMISSIONS_ERROR);
+        return;}
             QSqlQuery sqlquery;
             sqlquery.prepare("SELECT * from rooms");
             if(!sqlquery.exec()) {qDebug() << "[rooms]Query stopped: "+sqlquery.lastError().text();
@@ -148,18 +150,14 @@ void MainServer::UseCommand(QByteArray hdata, validClient* lClient, ServerThread
                 SEND_CLIENT ( tmpmap.toHTMLTegsFormat().toUtf8());
             }
 
-        }
-        else SEND_CLIENT(NO_PERMISSIONS_ERROR);
+
     }
     else if(cmd=="sleep")
     {
-        if(nClient->isAuth){
-            if(IS_ADMIN){
+        if(nClient->isAuth && IS_ADMIN){
                 ACore::Sleeper::msleep(ReplyMap["n"].toString().toInt());
                 SEND_CLIENT(YES_REPLY);
             }
-            else SEND_CLIENT(NO_PERMISSIONS_ERROR);
-        }
         else SEND_CLIENT(NO_PERMISSIONS_ERROR);
     }
     else if(cmd=="info")
@@ -193,7 +191,7 @@ void MainServer::UseCommand(QByteArray hdata, validClient* lClient, ServerThread
         else
         {
             QSqlQuery sqlquery;
-            QStringList clientlist = ReplyMap["id"].toString().split(",");
+            QStringList clientlist = ReplyMap["id"].toString().split("/");
             if(clientlist.size()<1)
             {
                 SEND_CLIENT(BAD_REQUEST_REPLY);
@@ -218,17 +216,16 @@ void MainServer::UseCommand(QByteArray hdata, validClient* lClient, ServerThread
                 }
                 for(int i=0;i<sqlquery.size();i++)
                 {
+                    sqlquery.next();
                     RecursionArray result;
-                    result["isAuth"]=nClient->isAuth;
-                    result["real_name"]=nClient->real_name;
-                    result["id"]=nClient->id;
-                    result["RegIP"]=nClient->RegIP;
-                    result["init"]=nClient->init;
-                    result["initV"]=nClient->initV;
-                    result["timeZone"]=nClient->TimeZone;
-                    result["colored"]=nClient->colored;
-                    result["prefix"]=nClient->prefix;
-                    result["status"]=nClient->status;
+                    result["real_name"]=sqlquery.value("real_name").toString();
+                    result["id"]=sqlquery.value("id").toInt();
+                    result["init"]=sqlquery.value("init").toString();
+                    result["initV"]=sqlquery.value("initV").toString();
+                    result["timeZone"]=sqlquery.value("timeZone").toString();
+                    result["colored"]=sqlquery.value("colored").toString();
+                    result["prefix"]=sqlquery.value("prefix").toString();
+                    result["status"]=sqlquery.value("status").toString();
                     if(IS_ADMIN)
                     {
                         result["group"]="ADM, acc";
@@ -264,14 +261,29 @@ void MainServer::UseCommand(QByteArray hdata, validClient* lClient, ServerThread
         {
             QTcpSocket sock;
             QStringList spl=host.split(":");
-            sock.connectToHost(spl.value(0),spl.value(1).toInt());
+            sock.connectToHost(host.remove(":"+spl.value(spl.size()-1)),spl.value(spl.size()-1).toInt());
             sock.waitForConnected(200);
 
             QString cmdd=ReplyMap["cmd"].toString();
-            if(cmdd=="ping")
+            if(cmdd=="echo")
             {
-                sock.write(QString("type=srcget&cmd=ping&sender="+nClient->name+"@"+settings["Host"].toString()+":"+settings["Port"].toString()).toUtf8());
+                sock.write(QString("type=srcget&cmd=echo&sender="+nClient->name+"@"+settings["Host"].toString()+":"+settings["Port"].toString()).toUtf8());
                 sock.waitForBytesWritten(200);
+                sock.disconnectFromHost();
+            }
+            else if(cmdd=="ping")
+            {
+                QTime time = QTime::currentTime();
+                time.start();
+                sock.write(QString("type=srcget&cmd=ping&sender="+nClient->name+"@"+settings["Host"].toString()+":"+settings["Port"].toString()).toUtf8());
+                sock.waitForReadyRead(500);
+                QString s = sock.readAll();
+                if(s.isEmpty()) {SEND_CLIENT("Timeout");}
+                else
+                {
+                    QString result = QString("<key>403</key>")+"<time>"+QString::number( time.elapsed() )+"</time>";
+                    SEND_CLIENT(result.toLocal8Bit());
+                }
                 sock.disconnectFromHost();
             }
         }
@@ -323,8 +335,88 @@ void MainServer::UseCommand(QByteArray hdata, validClient* lClient, ServerThread
     else if(cmd=="srcget")
     {
         if(SRCMode == 0 || SRCMode == 1 || SRCMode == 2) return;
-        if(ReplyMap["cmd"]=="ping")
+        if(ReplyMap["cmd"]=="echo")
             qDebug() << hdata;
+        else if(ReplyMap["cmd"]=="ping")
+        {
+            SEND_CLIENT(YES_REPLY);
+        }
+    }
+    else if(cmd=="msglist")
+    {
+        if(!nClient->isAuth)
+        {
+            SEND_CLIENT(NO_PERMISSIONS_ERROR);
+            return;
+        }
+        QSqlQuery sqlquery,sqlquery2;
+        QStringList clientlist = ReplyMap["room"].toString().split("/");
+        if(clientlist.size()<1)
+        {
+            SEND_CLIENT(BAD_REQUEST_REPLY);
+            return;
+        }
+        QString reply;
+        if(ReplyMap["new"].toString()!="true")
+        {
+        for(int i=0;i<clientlist.size();i++)
+        {
+            if(!clientlist.value(i).isEmpty()){reply+="( SELECT * FROM private WHERE idR = "+clientlist.value(i)+" ORDER BY id DESC  LIMIT 20 )";
+            if(i!=clientlist.size()-1) reply+=" UNION ";}
+            nClient->msgmap[clientlist.value(i).toInt()] = 0;
+        }
+        reply+=" ORDER BY id ASC";
+        }
+        else
+        {
+            for(int i=0;i<clientlist.size();i++)
+            {
+                if(!clientlist.value(i).isEmpty()){reply+="( SELECT * FROM private WHERE idR = "+clientlist.value(i)+"  && id > "+QString::number( nClient->msgmap[clientlist.value(i).toInt()] )+" )";
+                if(i!=clientlist.size()-1) reply+=" UNION ";}
+            }
+            qDebug() << reply;
+        }
+
+            if(!sqlquery.exec(reply))
+            {
+                logs << "[msglist]Query stopped: "+sqlquery.lastError().text();
+                SEND_CLIENT ( SQL_ERROR );
+            }
+            else
+            {
+                QMap<int,RecursionArray> replymap;
+                for(int i=0;i<sqlquery.size();i++)
+                {
+                    sqlquery.next();
+                    int idRoom = sqlquery.value("idR").toInt();
+                    int idUser = sqlquery.value("idOt").toInt();
+                    int idLS = sqlquery.value("id").toInt();
+                    QString msgList = sqlquery.value("textMessage").toString();
+                    QString date = sqlquery.value("dateMessage").toString();
+                    QString cmdMessage = sqlquery.value("commandMessage").toString();
+                    RecursionArray valuemap;
+                    valuemap["textMessage"] = msgList;
+                    valuemap["dateMessage"] = date;
+                    valuemap["commandMessage"] = cmdMessage;
+                    valuemap["idUser"] = idUser;
+                    valuemap["id"] = idLS;
+                    if(nClient->msgmap[idRoom] < idLS) nClient->msgmap[idRoom] = idLS;
+                    replymap[idRoom][QString::number(replymap[idRoom].size())]=valuemap;
+                }
+                RecursionArray resultmap;
+                QList<int> keys = replymap.keys();
+                for(int i=0;i<keys.size();i++)
+                {
+                    replymap[keys.value(i)]["id"] = keys.value(i);
+                    replymap[keys.value(i)]["key"] = 403;
+                    resultmap[QString::number(i)] = replymap[keys.value(i)];
+                }
+                RecursionArray super;
+                super["key"]=403;
+                super["arg"]=resultmap;
+                qDebug() << super.print();
+                SEND_CLIENT(super.toHTMLTegsFormat().toUtf8());
+            }
     }
     else if(cmd=="su")
     {
