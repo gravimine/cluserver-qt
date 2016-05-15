@@ -65,5 +65,6 @@ protected:
     long long int sendedCmds;
 };
 void ReloadConfig();
+void AdminLog(validClient* n,QString action,QString info);
 extern MainServer* serverd;
 #endif // MAINSERVER_H

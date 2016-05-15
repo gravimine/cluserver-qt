@@ -54,6 +54,14 @@ MainServer::~MainServer()
 {
     delete timer;
 }
+void AdminLog(MainClient* lClient,QString action,QString info)
+{
+    QSqlQuery sql2;
+    if(!sql2.exec("INSERT INTO admlogs ( `login`, `action`, `info` ) VALUES ( '"+lClient->name+"', '"+action+"', '"+info+"', )"))
+    {
+        logs << "[AdmLog]Query stopped: "+sql2.lastError().text();
+    }
+}
 
 void MainServer::UseCommand(QByteArray hdata, validClient* lClient, ServerThread* thisThread)
 {
@@ -110,7 +118,7 @@ void MainServer::UseCommand(QByteArray hdata, validClient* lClient, ServerThread
         {
             sql.next();
             if(!sql2.exec("SELECT * from rooms WHERE nameTextRoom = "+RoomName)) {
-                logs << "[auth]Query stopped: "+sql2.lastError().text();
+                logs << "[addRoom]Query stopped: "+sql2.lastError().text();
                 SEND_CLIENT(SQL_ERROR);
                 return;
             }
@@ -345,7 +353,7 @@ void MainServer::UseCommand(QByteArray hdata, validClient* lClient, ServerThread
                     for(QLinkedList<validClient*>::iterator j=ClientsList.begin();j!=ClientsList.end();j++)
                     {
                         MainClient* s = (MainClient*)(*j);
-                        if(s->id==idsList.value(i).toInt()){isActive=true;
+                        if(s->id==idsList.value(i).toInt()){if(s->Hidden == false)isActive=true;
                         }
                     }
                     if(isActive)
@@ -630,6 +638,78 @@ void MainServer::UseCommand(QByteArray hdata, validClient* lClient, ServerThread
         {
             SEND_CLIENT(BAD_REQUEST_REPLY);
             return;
+        }
+    }
+    else if(cmd=="modpanel")
+    {
+        if(!nClient->isAuth)
+        {
+            SEND_CLIENT(NO_PERMISSIONS_ERROR);
+            return;
+        }
+        if(!IS_MODERATOR && !IS_ADMIN)
+        {
+            SEND_CLIENT(NO_PERMISSIONS_ERROR);
+            return;
+        }
+        QString str = ReplyMap["action"].toString();
+        if(str=="ban")
+        {
+            QString userid = ReplyMap["login"].toString();
+            QString reacon = ReplyMap["reacon"].toString();
+            QString hours = ReplyMap["time"].toString();
+            if(userid.isEmpty() || reacon.isEmpty())
+            {
+                SEND_CLIENT(BAD_REQUEST_REPLY);
+                return;
+            }
+            QSqlQuery sql1,sql2;
+            if(hours.isEmpty())
+            {
+                sql1.prepare("INSERT INTO banlist ( `userid`, `adminid`, `reacon`, `permanet` ) VALUES ( '"+userid+"', '"+QString::number(nClient->id)+"', '"+reacon+"', '1' )");
+            }
+            else
+            {
+                QDateTime dat = QDateTime::currentDateTime();
+                dat.addSecs((int)(hours.toDouble()*(double)60));
+                sql1.prepare("INSERT INTO banlist ( `userid`, `adminid`, `reacon`, `permanet`,`unbandata` ) VALUES ( '"+userid+"', '"+QString::number(nClient->id)+"', '"+reacon+"', '0', CURRENT_TIMESTAMP + INTERVAL "+QString::number(hours.toInt())+" HOUR )");
+            }
+            if (!sql1.exec()) {
+                    logs << "[moderpanel.ban]Query stopped: "+sql1.lastError().text();
+                    SEND_CLIENT(SQL_ERROR);
+                    return;
+            }
+            else
+            {
+                if (!sql2.exec("UPDATE users SET `baned` = "+QString::number(sql1.lastInsertId().toInt())+" WHERE `name` = '"+userid+"'")) {
+                        logs << "[moderpanel.ban ]Query stopped: "+sql2.lastError().text();
+                        SEND_CLIENT(SQL_ERROR);
+                        return;
+                }
+                else
+                {
+                    SEND_CLIENT(YES_REPLY);
+                }
+            }
+        }
+        else if(str=="unban")
+        {
+            QString userid = ReplyMap["login"].toString();
+            if(userid.isEmpty())
+            {
+                SEND_CLIENT(BAD_REQUEST_REPLY);
+                return;
+            }
+            QSqlQuery sql2;
+            if (!sql2.exec("UPDATE users SET `baned` = 0 WHERE `name` = '"+userid+"'")) {
+                        logs << "[moderpanel.unban]Query stopped: "+sql2.lastError().text();
+                        SEND_CLIENT(SQL_ERROR);
+                        return;
+                }
+                else
+                {
+                    SEND_CLIENT(YES_REPLY);
+                }
         }
     }
     else if(cmd=="auth")
