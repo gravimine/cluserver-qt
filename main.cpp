@@ -90,6 +90,7 @@ int main(int argc, char *argv[])
         else
             logs << "Mysql connected .. done";
         a.exec();
+        logs << "Exit";
 
     }
     delete serverd;

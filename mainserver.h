@@ -29,7 +29,8 @@ struct MainClient : public validClient
 {
     QString name;
     QString pass;
-    int id,achived;
+    int id,achived,banned;
+    bool Hidden;
     QStringList permissions;
     QString RegIP,init,initV,TimeZone,ShowName,status,email,prefix,colored,real_name;
     QMap<int,int> msgmap;

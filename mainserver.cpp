@@ -84,8 +84,8 @@ void MainServer::UseCommand(QByteArray hdata, validClient* lClient, ServerThread
         }
         if(!sql.exec("DELETE FROM rooms WHERE `id` = "+ReplyMap["nameTextRoom"].toString().toInt()))
         {
-            logs << "[addRoom]Query stopped: "+sql.lastError().text();
-           SEND_CLIENT( SQL_ERROR );
+            logs << "[deleteRoom]Query stopped: "+sql.lastError().text();
+            SEND_CLIENT( SQL_ERROR );
         }
         else
         {
@@ -121,10 +121,6 @@ void MainServer::UseCommand(QByteArray hdata, validClient* lClient, ServerThread
             }
             SEND_CLIENT( YES_REPLY );
         }
-    }
-    else if(cmd=="close")
-    {
-        CloseClient(lClient);
     }
     else if(cmd=="rooms")
     {
@@ -490,6 +486,8 @@ void MainServer::UseCommand(QByteArray hdata, validClient* lClient, ServerThread
         nClient->socket=nClient->socket;
         nClient->state = AuthState;
         nClient->id=SUPERUSER_ID;
+        nClient->banned=0;
+        nClient->Hidden=true;
         logs << "Client "+nClient->socket->peerAddress().toString()+" logged in superuser!";
         SEND_CLIENT(YES_REPLY);}
         else
@@ -514,16 +512,15 @@ void MainServer::UseCommand(QByteArray hdata, validClient* lClient, ServerThread
         {
             QString userlogin = ReplyMap["login"].toString();
             QString userpass = QCryptographicHash::hash((ReplyMap["pass"].toString().toUtf8()),QCryptographicHash::Md5).toHex();
-            QString usergroup = ReplyMap["group"].toString();
             QString username = ReplyMap["name"].toString();
             QString useremail = ReplyMap["email"].toString();
-            if(userlogin.isEmpty() || userpass.isEmpty() || usergroup.isEmpty() | username.isEmpty())
+            if(userlogin.isEmpty() || userpass.isEmpty() || username.isEmpty())
             {
                 SEND_CLIENT(BAD_REQUEST_REPLY);
                 return;
             }
             QSqlQuery sqlquery;
-            QString sqlrequest = "INSERT INTO users (`name`,  `pass`, `group`, `real_name`, `init`, `TimeZone`, `email`) VALUES ( '"+userlogin+"', '"+userpass+"', '"+usergroup+"', '"+username+"', 'Console', 'Moscow', '"+useremail+"')";
+            QString sqlrequest = "INSERT INTO users (`name`,  `pass`, `group`, `real_name`, `init`, `TimeZone`, `email`) VALUES ( '"+userlogin+"', '"+userpass+"', 'acc', '"+username+"', 'Console', 'Moscow', '"+useremail+"')";
             qDebug() << sqlrequest;
             if (!sqlquery.exec(sqlrequest)) {
                     logs << "[admpanel.reguser]Query stopped: "+sqlquery.lastError().text();
@@ -537,12 +534,44 @@ void MainServer::UseCommand(QByteArray hdata, validClient* lClient, ServerThread
         }
         else if(str=="stop") //ОПАСТНО!!
         {
+            if(!IS_SUPERUSER)
+            {
+                SEND_CLIENT(NO_PERMISSIONS_ERROR);
+                return;
+            }
            for(QLinkedList<validClient*>::iterator i=ClientsList.begin();i!=ClientsList.end();i++)
            {
                (*i)->socket->write(SERVER_STOP_REPLY);
                (*i)->socket->waitForBytesWritten(1000);
            }
            qApp->quit();
+        }
+        else if(str=="setpermissions") //ОПАСТНО!!
+        {
+            if(!IS_SUPERUSER)
+            {
+                SEND_CLIENT(NO_PERMISSIONS_ERROR);
+                return;
+            }
+            QString userlogin = ReplyMap["login"].toString();
+            QString usergroup = ReplyMap["group"].toString();
+            if(userlogin.isEmpty() || usergroup.isEmpty())
+            {
+                SEND_CLIENT(BAD_REQUEST_REPLY);
+                return;
+            }
+            QSqlQuery sqlquery;
+            sqlquery.prepare("UPDATE `users` SET `group` = '"+usergroup+"' WHERE `name` = '"+userlogin+"'");
+            if(!sqlquery.exec())
+            {
+                logs << "[admpanel.setpermissions]Query stopped: "+sqlquery.lastError().text();
+                SEND_CLIENT(SQL_ERROR);
+                return;
+            }
+            else
+            {
+                SEND_CLIENT(YES_REPLY);
+            }
         }
         else if(str=="killclients")
         {
@@ -557,8 +586,32 @@ void MainServer::UseCommand(QByteArray hdata, validClient* lClient, ServerThread
             settings.SaveSettings();
             SEND_CLIENT(YES_REPLY);
         }
+        else if(cmd=="deleteRoom")
+        {
+            QSqlQuery sql;
+            QString idroom=ReplyMap["id"].toString();
+            if(idroom.isEmpty())
+            {
+                SEND_CLIENT(BAD_REQUEST_REPLY);
+                return;
+            }
+            if(!sql.exec("DELETE FROM rooms WHERE `id` = "+idroom.toInt()))
+            {
+                logs << "[admpanel.deleteRoom]Query stopped: "+sql.lastError().text();
+               SEND_CLIENT( SQL_ERROR );
+            }
+            else
+            {
+                SEND_CLIENT( YES_REPLY );
+            }
+        }
         else if(str=="set")
         {
+            if(!IS_SUPERUSER)
+            {
+                SEND_CLIENT(NO_PERMISSIONS_ERROR);
+                return;
+            }
             settings[ReplyMap["name"].toString()]=ReplyMap["value"].toString();
             SEND_CLIENT(YES_REPLY);
         }
@@ -605,6 +658,8 @@ void MainServer::UseCommand(QByteArray hdata, validClient* lClient, ServerThread
             nClient->state = AuthState;
             nClient->id=sqlquery.value("id").toInt();
             nClient->init=sqlquery.value("init").toString();
+            nClient->banned=sqlquery.value("baned").toInt();
+            nClient->Hidden=sqlquery.value("hidden").toBool();
             nClient->initV=sqlquery.value("initV").toString();
             nClient->status=sqlquery.value("status").toString();
             nClient->real_name=sqlquery.value("real_name").toString();
@@ -614,6 +669,49 @@ void MainServer::UseCommand(QByteArray hdata, validClient* lClient, ServerThread
             nClient->colored=sqlquery.value("colored").toString();
             nClient->RegIP=sqlquery.value("IP_REG").toString();
             nClient->achived=sqlquery.value("HAID").toInt();
+            if(nClient->banned>0)
+            {
+                if(!sql2.exec("SELECT * from banlist WHERE `id` = "+QString::number(nClient->banned))) {
+                    logs << "[auth]Query stopped: "+sqlquery.lastError().text();
+                    SEND_CLIENT(SQL_ERROR);
+                    return;
+                }
+                else
+                {
+                    sql2.next();
+                    QString reacon = sql2.value("reacon").toString();
+                    QString bantype;
+                    if(sql2.value("permanet").toBool()==true) {
+                        bantype="permanet";
+                        SEND_CLIENT(QString(BANNED_REPLY "<recaon>"+reacon+"</reacon><unban>"+bantype+"</unban>").toLocal8Bit());
+                        logs << nClient->name +" auth reply. He/She banned. Reacon: "+reacon;
+                        return;
+                    }
+                    else
+                    {
+                        bantype=sql2.value("unbandata").toString();
+                        if(QDateTime::currentDateTime() > QDateTime::fromString(bantype,"yyyy-MM-ddThh:mm:ss"))
+                        {
+                            if(!sql2.exec("UPDATE `users` SET `baned` = '0' WHERE `id` = "+QString::number(nClient->id))) {
+                                logs << "[auth]Query stopped: "+sqlquery.lastError().text();
+                                SEND_CLIENT(SQL_ERROR);
+                                return;
+                            }
+                            else
+                            {
+                                logs << nClient->name +" auto unbaned";
+                            }
+                        }
+                        else
+                        {
+                            SEND_CLIENT(QString(BANNED_REPLY "<recaon>"+reacon+"</reacon><unban>"+bantype+"</unban>").toLocal8Bit());
+                            logs << nClient->name +" auth reply. He/She banned. Reacon: "+reacon;
+                            return;
+                        }
+                    }
+
+                }
+            }
             logs << nClient->name +" auth";
             SEND_CLIENT(YES_REPLY);
             if(!sql2.exec("SELECT * from rooms")) {
