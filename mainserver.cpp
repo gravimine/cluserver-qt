@@ -1,14 +1,6 @@
 #include "mainserver.h"
 #include <QCoreApplication>
-ACore::ALog logs;
-bool isDebug;
-QSqlDatabase db;
-int MinThreadd;
-int MaxThreadd;
-int SRCMode;
-int MaxCommandsInQuest;
-ACore::ASettings settings("settings.cfg",ACore::CfgFormat);
-MainServer* serverd;
+
 using namespace ACore;
 void ReloadConfig()
 {
@@ -32,6 +24,8 @@ void MainServer::MonitorTimer()
     otchet["ClientsListSize"]=ClientsList.size();
     otchet["Threads"]=ThreadList.size();
     otchet["GetBytes"]=QString::number( GetedBytes );
+    otchet["GetCmds"]=QString::number( GetedCmds );
+    otchet["sendCmds"]=QString::number( sendedCmds );
     for(int i=0;i<ThreadList.size();i++)
     {
         if(ThreadList.value(i)->isSleep)
@@ -44,9 +38,16 @@ void MainServer::MonitorTimer()
 MainServer::MainServer()
 {
     timer = new QTimer();
-    GetedBytes = 0;
+    GetedBytes = 0LL;
+    sendedCmds = 0LL;
+    GetedCmds = 0LL;
     connect(timer, &QTimer::timeout, this, &MainServer::MonitorTimer);
-
+    connect(this, &MainServer::signalClientConnected, this, &MainServer::clientConn);
+}
+void MainServer::clientConn(validClient* user)
+{
+    qDebug() << "Client connect "+user->socket->peerAddress().toString()+":"+QString::number(user->socket->peerPort());
+    sendToClient(user, ClientInConnectText.toUtf8());
 }
 
 MainServer::~MainServer()
@@ -60,69 +61,70 @@ void MainServer::UseCommand(QByteArray hdata, validClient* lClient, ServerThread
     //data = data.replace("\r","");
     //data = data.replace("\n","");
     RecursionArray ReplyMap;
-    ReplyMap.fromPostGetFormat(hdata);
+
+    ReplyMap.fromPost(QString::fromUtf8( hdata ));
     //if(isDebug) qDebug() << ReplyMap.print();
     QString cmd=ReplyMap["type"].toString();
-    if(cmd=="set")
+    GetedCmds++;
+    GetedBytes+=hdata.size();
+    if(cmd=="deleteRoom")
     {
-        if(nClient->isAuth){
-            if(IS_ADMIN)
-                settings[ReplyMap["name"].toString()]=ReplyMap["value"].toString();
-            else SEND_CLIENT(NO_PERMISSIONS_ERROR);
+        QSqlQuery sql,sql2;
+        if(!sql2.exec("SELECT * FROM rooms WHERE idUserCreat = "+QString::number(nClient->id)+" && `id` = "+ReplyMap["nameTextRoom"].toString().toInt()))
+        {
+            logs << "[deleteRoom]Query stopped: "+sql2.lastError().text();
+           SEND_CLIENT( SQL_ERROR );
         }
-        else SEND_CLIENT(NO_PERMISSIONS_ERROR);
-    }
-    else if(cmd=="reload")
-    {
-        if(nClient->isAuth){
-            if(IS_ADMIN)
+        else{
+            if(sql2.size()<1)
             {
-                settings.LoadSettings();
-                ReloadConfig();
+                SEND_CLIENT(NO_PERMISSIONS_ERROR);
+                return;
             }
-            else SEND_CLIENT(NO_PERMISSIONS_ERROR);
         }
-        else SEND_CLIENT(NO_PERMISSIONS_ERROR);
+        if(!sql.exec("DELETE FROM rooms WHERE `id` = "+ReplyMap["nameTextRoom"].toString().toInt()))
+        {
+            logs << "[addRoom]Query stopped: "+sql.lastError().text();
+           SEND_CLIENT( SQL_ERROR );
+        }
+        else
+        {
+            SEND_CLIENT( YES_REPLY );
+        }
     }
-    else if(cmd=="savesettings")
+    else if(cmd=="addRoom")
     {
-        if(nClient->isAuth){
-            if(IS_ADMIN){
-            settings.SaveSettings();
-            SEND_CLIENT(YES_REPLY);}
-            else SEND_CLIENT(NO_PERMISSIONS_ERROR);
+        if(!nClient->isAuth)
+        {
+            SEND_CLIENT(NO_PERMISSIONS_ERROR);
+            return;
         }
-        else SEND_CLIENT(NO_PERMISSIONS_ERROR);
+        QString RoomName = ReplyMap["nameTextRoom"].toString().replace("'","\\'").replace("\\","\\\\");
+        QSqlQuery sql,sql2;
+        if(!sql.exec("INSERT INTO rooms (`nameTextRoom`,  `idUserCreat`) VALUES ( '"+RoomName+"', '"+QString::number(nClient->id)+"')"))
+        {
+            logs << "[addRoom]Query stopped: "+sql.lastError().text();
+           SEND_CLIENT( SQL_ERROR );
+        }
+        else
+        {
+            sql.next();
+            if(!sql2.exec("SELECT * from rooms WHERE nameTextRoom = "+RoomName)) {
+                logs << "[auth]Query stopped: "+sql2.lastError().text();
+                SEND_CLIENT(SQL_ERROR);
+                return;
+            }
+            else
+            {
+                sql2.next();
+                nClient->allowrooms << sql2.value("id").toInt();
+            }
+            SEND_CLIENT( YES_REPLY );
+        }
     }
     else if(cmd=="close")
     {
         CloseClient(lClient);
-    }
-    else if(cmd=="stop") //ОПАСТНО!!
-    {
-        if(nClient->isAuth){
-            if(IS_ADMIN){
-                for(QLinkedList<validClient*>::iterator i=ClientsList.begin();i!=ClientsList.end();i++)
-                {
-                    (*i)->socket->write(SERVER_STOP_REPLY);
-                    (*i)->socket->waitForBytesWritten(1000);
-                }
-                qApp->quit();
-            }
-            else SEND_CLIENT(NO_PERMISSIONS_ERROR);
-        }
-        else SEND_CLIENT(NO_PERMISSIONS_ERROR);
-    }
-    else if(cmd=="killclients")
-    {
-        if(nClient->isAuth && IS_ADMIN){
-                for(QLinkedList<validClient*>::iterator i=ClientsList.begin();i!=ClientsList.end();i++)
-                {
-                    (*i)->socket->write(THREAD_KILL_ERROR);
-                    (*i)->socket->waitForBytesWritten(1000); CloseClient((*i));
-                }
-        }
-        else SEND_CLIENT(NO_PERMISSIONS_ERROR);
     }
     else if(cmd=="rooms")
     {
@@ -131,7 +133,7 @@ void MainServer::UseCommand(QByteArray hdata, validClient* lClient, ServerThread
         return;}
             QSqlQuery sqlquery;
             sqlquery.prepare("SELECT * from rooms");
-            if(!sqlquery.exec()) {qDebug() << "[rooms]Query stopped: "+sqlquery.lastError().text();
+            if(!sqlquery.exec()) {logs << "[rooms]Query stopped: "+sqlquery.lastError().text();
             SEND_CLIENT( SQL_ERROR );}
             else
             {
@@ -146,19 +148,15 @@ void MainServer::UseCommand(QByteArray hdata, validClient* lClient, ServerThread
                 replymap[QString::number(i)]=reply;}
                 RecursionArray tmpmap;
                 tmpmap["arg"]=replymap;
-                tmpmap["key"]=403;
-                SEND_CLIENT ( tmpmap.toHTMLTegsFormat().toUtf8());
+                tmpmap["key"]=YES_REPLY_INT;
+                SEND_CLIENT ( tmpmap.toHtml().toUtf8());
             }
 
 
     }
-    else if(cmd=="sleep")
+    else if(cmd=="version")
     {
-        if(nClient->isAuth && IS_ADMIN){
-                ACore::Sleeper::msleep(ReplyMap["n"].toString().toInt());
-                SEND_CLIENT(YES_REPLY);
-            }
-        else SEND_CLIENT(NO_PERMISSIONS_ERROR);
+        SEND_CLIENT(versionarr);
     }
     else if(cmd=="info")
     {
@@ -237,8 +235,52 @@ void MainServer::UseCommand(QByteArray hdata, validClient* lClient, ServerThread
         }
         RecursionArray tmpmap;
         tmpmap["arg"]=result2;
-        tmpmap["key"]=403;
-        SEND_CLIENT(tmpmap.toHTMLTegsFormat().toUtf8());
+        tmpmap["key"]=YES_REPLY_INT;
+        SEND_CLIENT(tmpmap.toHtml().toUtf8());
+    }
+    else if(cmd=="sendmsg")
+    {
+        if(!nClient->isAuth)
+        {
+            SEND_CLIENT(NO_PERMISSIONS_ERROR);
+            return;
+        }
+        QList<QString> keys = ReplyMap.keys();
+        QList<QString> keys2;
+        for(int i=0;i<keys.size();i++)
+        {
+            QStringList tmp = keys.value(i).split("_");
+            if(tmp.size() != 3) continue;
+            if(!nClient->allowrooms.contains(tmp.value(1).toInt())) continue;
+            if(tmp.value(0).isEmpty() || tmp.value(1).isEmpty() || tmp.value(2).isEmpty() || ReplyMap[keys.value(i)].toString().isEmpty()) continue;
+            keys2<< keys.value(i);
+        }
+        if(keys2.size() < 1)
+        {
+            SEND_CLIENT(BAD_REQUEST_REPLY);
+            return;
+        }
+        QSqlQuery sqlquery;
+        QString reply = " INSERT INTO private (`idR`, `type`, `textMessage`, `idOt`, `dateMessage`, `commandMessage`) VALUES ";
+        for(int i=0;i<keys2.size();i++)
+        {
+            QStringList tmp = keys2.value(i).split("_");
+
+            if(tmp.value(0)!="c")
+                reply+=" ( '"+tmp.value(1)+"', 'pm', '"+ReplyMap[keys2.value(i)].toString().replace("'","\\'").replace("\\","\\\\")+"', '"+QString::number(nClient->id)+"', CURRENT_TIMESTAMP, '' )";
+            else
+                reply+=" ( '"+tmp.value(1)+"', 'pm', '', '"+QString::number(nClient->id)+"', CURRENT_TIMESTAMP, '"+ReplyMap[keys2.value(i)].toString().replace("'","\\'").replace("\\","\\\\")+"' )";
+            if(i!=keys2.size()-1) reply+=",";
+        }
+        logs << reply;
+        if (!sqlquery.exec(reply)) {
+                logs << "[sendmsg]Query stopped: "+sqlquery.lastError().text();
+                SEND_CLIENT ( SQL_ERROR );
+            }
+        else
+        {
+            SEND_CLIENT(YES_REPLY);
+        }
     }
     else if(cmd=="sendsrc")
     {
@@ -261,13 +303,14 @@ void MainServer::UseCommand(QByteArray hdata, validClient* lClient, ServerThread
         {
             QTcpSocket sock;
             QStringList spl=host.split(":");
-            sock.connectToHost(host.remove(":"+spl.value(spl.size()-1)),spl.value(spl.size()-1).toInt());
+            QString splhost = host.remove(host.size()-spl.value(spl.size()-1).size()-1,spl.value(spl.size()-1).size()+1);
+            sock.connectToHost(splhost,spl.value(spl.size()-1).toInt());
             sock.waitForConnected(200);
 
             QString cmdd=ReplyMap["cmd"].toString();
             if(cmdd=="echo")
             {
-                sock.write(QString("type=srcget&cmd=echo&sender="+nClient->name+"@"+settings["Host"].toString()+":"+settings["Port"].toString()).toUtf8());
+                sock.write(QString("type=srcget&cmd=echo&sender="+nClient->name+"@"+serverd->serverAddress().toString()+":"+QString::number( serverd->serverPort() )).toUtf8());
                 sock.waitForBytesWritten(200);
                 sock.disconnectFromHost();
             }
@@ -275,13 +318,12 @@ void MainServer::UseCommand(QByteArray hdata, validClient* lClient, ServerThread
             {
                 QTime time = QTime::currentTime();
                 time.start();
-                sock.write(QString("type=srcget&cmd=ping&sender="+nClient->name+"@"+settings["Host"].toString()+":"+settings["Port"].toString()).toUtf8());
                 sock.waitForReadyRead(500);
-                QString s = sock.readAll();
-                if(s.isEmpty()) {SEND_CLIENT("Timeout");}
+                QString server_hello = sock.readAll();
+                if(server_hello.isEmpty()) {SEND_CLIENT("Timeout");}
                 else
                 {
-                    QString result = QString("<key>403</key>")+"<time>"+QString::number( time.elapsed() )+"</time>";
+                    QString result = QString(YES_REPLY)+"<time>"+QString::number( time.elapsed() )+"</time><server>"+server_hello+"</server>";
                     SEND_CLIENT(result.toLocal8Bit());
                 }
                 sock.disconnectFromHost();
@@ -313,24 +355,23 @@ void MainServer::UseCommand(QByteArray hdata, validClient* lClient, ServerThread
                     if(isActive)
                     {
                         RecursionArray result2;
-                        result2["userOnlineStatus"]=403;
-                        result2["key"]=403;
+                        result2["userOnlineStatus"]=YES_REPLY_INT;
+                        result2["key"]=YES_REPLY_INT;
                         result2["userId"]=idsList.value(i);
                         result[QString::number(i)]=result2;
                     }
                     else
                     {
                         RecursionArray result2;
-                        result2["key"]=402;
+                        result2["key"]=BAD_REQUEST_REPLY_INT;
                         result2["userId"]=idsList.value(i);
                         result[QString::number(i)]=result2;
                     }
                 }
         RecursionArray super;
-        super["key"]=403;
+        super["key"]=YES_REPLY_INT;
         super["arg"]=result;
-        qDebug() << super.print();
-        SEND_CLIENT(super.toHTMLTegsFormat().toUtf8());
+        SEND_CLIENT(super.toHtml().toUtf8());
     }
     else if(cmd=="srcget")
     {
@@ -349,7 +390,7 @@ void MainServer::UseCommand(QByteArray hdata, validClient* lClient, ServerThread
             SEND_CLIENT(NO_PERMISSIONS_ERROR);
             return;
         }
-        QSqlQuery sqlquery,sqlquery2;
+        QSqlQuery sqlquery;
         QStringList clientlist = ReplyMap["room"].toString().split("/");
         if(clientlist.size()<1)
         {
@@ -363,6 +404,8 @@ void MainServer::UseCommand(QByteArray hdata, validClient* lClient, ServerThread
         {
             if(!clientlist.value(i).isEmpty()){reply+="( SELECT * FROM private WHERE idR = "+clientlist.value(i)+" ORDER BY id DESC  LIMIT 20 )";
             if(i!=clientlist.size()-1) reply+=" UNION ";}
+            else
+                clientlist.removeAt(i);
             nClient->msgmap[clientlist.value(i).toInt()] = 0;
         }
         reply+=" ORDER BY id ASC";
@@ -373,14 +416,16 @@ void MainServer::UseCommand(QByteArray hdata, validClient* lClient, ServerThread
             {
                 if(!clientlist.value(i).isEmpty()){reply+="( SELECT * FROM private WHERE idR = "+clientlist.value(i)+"  && id > "+QString::number( nClient->msgmap[clientlist.value(i).toInt()] )+" )";
                 if(i!=clientlist.size()-1) reply+=" UNION ";}
+                else
+                    clientlist.removeAt(i);
             }
-            qDebug() << reply;
         }
 
             if(!sqlquery.exec(reply))
             {
                 logs << "[msglist]Query stopped: "+sqlquery.lastError().text();
                 SEND_CLIENT ( SQL_ERROR );
+                return;
             }
             else
             {
@@ -395,9 +440,9 @@ void MainServer::UseCommand(QByteArray hdata, validClient* lClient, ServerThread
                     QString date = sqlquery.value("dateMessage").toString();
                     QString cmdMessage = sqlquery.value("commandMessage").toString();
                     RecursionArray valuemap;
-                    valuemap["textMessage"] = msgList;
-                    valuemap["dateMessage"] = date;
-                    valuemap["commandMessage"] = cmdMessage;
+                    if(!msgList.isEmpty())valuemap["textMessage"] = msgList;
+                    else valuemap["commandMessage"] = cmdMessage;
+                    valuemap["dateMessage"] = date.replace("T"," ");
                     valuemap["idUser"] = idUser;
                     valuemap["id"] = idLS;
                     if(nClient->msgmap[idRoom] < idLS) nClient->msgmap[idRoom] = idLS;
@@ -408,14 +453,30 @@ void MainServer::UseCommand(QByteArray hdata, validClient* lClient, ServerThread
                 for(int i=0;i<keys.size();i++)
                 {
                     replymap[keys.value(i)]["id"] = keys.value(i);
-                    replymap[keys.value(i)]["key"] = 403;
-                    resultmap[QString::number(i)] = replymap[keys.value(i)];
+
+                    if(nClient->allowrooms.contains(keys.value(i))) {
+                        replymap[keys.value(i)]["key"] = YES_REPLY_INT;
+                        resultmap[QString::number(i)] = replymap[keys.value(i)];}
+                    else
+                        replymap[keys.value(i)]["key"] = BAD_REQUEST_REPLY_INT;
+                }
+                if(keys.size() < clientlist.size())
+                {
+                    for(int i=0;i<clientlist.size();i++)
+                    {
+                        if(replymap[clientlist.value(i).toInt()].size() == 0)
+                        {
+                            replymap[clientlist.value(i).toInt()]["id"] = clientlist.value(i).toInt();
+                            replymap[clientlist.value(i).toInt()]["key"] = BAD_REQUEST_REPLY_INT;
+                            resultmap[QString::number(i)] = replymap[clientlist.value(i).toInt()];
+                        }
+                    }
                 }
                 RecursionArray super;
-                super["key"]=403;
+                super["key"]=YES_REPLY_INT;
                 super["arg"]=resultmap;
                 qDebug() << super.print();
-                SEND_CLIENT(super.toHTMLTegsFormat().toUtf8());
+                SEND_CLIENT(super.toHtml().toUtf8());
             }
     }
     else if(cmd=="su")
@@ -428,19 +489,104 @@ void MainServer::UseCommand(QByteArray hdata, validClient* lClient, ServerThread
         nClient->permissions=str.split(", ");
         nClient->socket=nClient->socket;
         nClient->state = AuthState;
-        nClient->numUsingCommands = nClient->numUsingCommands;
         nClient->id=SUPERUSER_ID;
-        logs << "Client logged in superuser!";
+        logs << "Client "+nClient->socket->peerAddress().toString()+" logged in superuser!";
         SEND_CLIENT(YES_REPLY);}
         else
-        SEND_CLIENT(NO_PERMISSIONS_ERROR);
+        {
+            SEND_CLIENT(NO_PERMISSIONS_ERROR);
+        }
+    }
+    else if(cmd=="admpanel")
+    {
+        if(!nClient->isAuth)
+        {
+            SEND_CLIENT(NO_PERMISSIONS_ERROR);
+            return;
+        }
+        if(!IS_ADMIN)
+        {
+            SEND_CLIENT(NO_PERMISSIONS_ERROR);
+            return;
+        }
+        QString str = ReplyMap["action"].toString();
+        if(str=="reguser")
+        {
+            QString userlogin = ReplyMap["login"].toString();
+            QString userpass = QCryptographicHash::hash((ReplyMap["pass"].toString().toUtf8()),QCryptographicHash::Md5).toHex();
+            QString usergroup = ReplyMap["group"].toString();
+            QString username = ReplyMap["name"].toString();
+            QString useremail = ReplyMap["email"].toString();
+            if(userlogin.isEmpty() || userpass.isEmpty() || usergroup.isEmpty() | username.isEmpty())
+            {
+                SEND_CLIENT(BAD_REQUEST_REPLY);
+                return;
+            }
+            QSqlQuery sqlquery;
+            QString sqlrequest = "INSERT INTO users (`name`,  `pass`, `group`, `real_name`, `init`, `TimeZone`, `email`) VALUES ( '"+userlogin+"', '"+userpass+"', '"+usergroup+"', '"+username+"', 'Console', 'Moscow', '"+useremail+"')";
+            qDebug() << sqlrequest;
+            if (!sqlquery.exec(sqlrequest)) {
+                    logs << "[admpanel.reguser]Query stopped: "+sqlquery.lastError().text();
+                    SEND_CLIENT(SQL_ERROR);
+                    return;
+            }
+            else
+            {
+                SEND_CLIENT(YES_REPLY);
+            }
+        }
+        else if(str=="stop") //ОПАСТНО!!
+        {
+           for(QLinkedList<validClient*>::iterator i=ClientsList.begin();i!=ClientsList.end();i++)
+           {
+               (*i)->socket->write(SERVER_STOP_REPLY);
+               (*i)->socket->waitForBytesWritten(1000);
+           }
+           qApp->quit();
+        }
+        else if(str=="killclients")
+        {
+            for(QLinkedList<validClient*>::iterator i=ClientsList.begin();i!=ClientsList.end();i++)
+            {
+               (*i)->socket->write(THREAD_KILL_ERROR);
+               (*i)->socket->waitForBytesWritten(1000); CloseClient((*i));
+            }
+        }
+        else if(str=="savesettings")
+        {
+            settings.SaveSettings();
+            SEND_CLIENT(YES_REPLY);
+        }
+        else if(str=="set")
+        {
+            settings[ReplyMap["name"].toString()]=ReplyMap["value"].toString();
+            SEND_CLIENT(YES_REPLY);
+        }
+        else if(str=="reload")
+        {
+            settings.LoadSettings();
+            ReloadConfig();
+            SEND_CLIENT(YES_REPLY);
+        }
+        else if(str=="sleep")
+        {
+            ACore::Sleeper::msleep(ReplyMap["n"].toString().toInt());
+            SEND_CLIENT(YES_REPLY);
+        }
+        else
+        {
+            SEND_CLIENT(BAD_REQUEST_REPLY);
+            return;
+        }
     }
     else if(cmd=="auth")
     {
-        QSqlQuery sqlquery;
+        QSqlQuery sqlquery,sql2;
 
-        if (!sqlquery.exec(QString("SELECT * FROM users WHERE name = '%1' && pass = md5('%2');").arg(ReplyMap["login"].toString()).arg(ReplyMap["pass"].toString()))) {
-                qDebug() << "[auth]Query stopped: "+sqlquery.lastError().text();
+        if (!sqlquery.exec(QString("SELECT * FROM users WHERE ( name = '%1' || email = '%1' ) && pass = md5('%2');").arg(ReplyMap["login"].toString()).arg(ReplyMap["pass"].toString()))) {
+                logs << "[auth]Query stopped: "+sqlquery.lastError().text();
+                SEND_CLIENT(SQL_ERROR);
+                return;
             }
         else
         {
@@ -457,12 +603,11 @@ void MainServer::UseCommand(QByteArray hdata, validClient* lClient, ServerThread
             nClient->permissions=str.split(", ");
             nClient->socket=nClient->socket;
             nClient->state = AuthState;
-            nClient->numUsingCommands = nClient->numUsingCommands;
             nClient->id=sqlquery.value("id").toInt();
             nClient->init=sqlquery.value("init").toString();
             nClient->initV=sqlquery.value("initV").toString();
             nClient->status=sqlquery.value("status").toString();
-            nClient->real_name=sqlquery.value("nickname").toString();
+            nClient->real_name=sqlquery.value("real_name").toString();
             nClient->prefix=sqlquery.value("prefix").toString();
             nClient->email=sqlquery.value("email").toString();
             nClient->TimeZone=sqlquery.value("TimeZone").toString();
@@ -471,6 +616,20 @@ void MainServer::UseCommand(QByteArray hdata, validClient* lClient, ServerThread
             nClient->achived=sqlquery.value("HAID").toInt();
             logs << nClient->name +" auth";
             SEND_CLIENT(YES_REPLY);
+            if(!sql2.exec("SELECT * from rooms")) {
+                logs << "[auth]Query stopped: "+sqlquery.lastError().text();
+                SEND_CLIENT(SQL_ERROR);
+                return;
+            }
+            else
+            {
+                for(int i=0;i<sql2.size();i++)
+                {
+                    sql2.next();
+                    if(sql2.value("idsUsers").toString().split(", ").contains(QString::number(nClient->id)) || sql2.value("idUserCreat").toInt() == nClient->id)
+                        nClient->allowrooms << sql2.value("id").toInt();
+                }
+            }
         }
     }
 }

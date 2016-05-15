@@ -12,7 +12,7 @@ include(/home/gravit/code/aslib/ANetwork/ANetwork.pri)
 
 TARGET = QtServer
 TEMPLATE = app
-
+ QMAKE_CXXFLAGS="-std=gnu++11"
 
 SOURCES += main.cpp \
     mainserver.cpp
