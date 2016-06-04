@@ -7,6 +7,7 @@
 #include <string>
 #include <map>
 //#include "apermissions.h"
+AClusterKeys clusterkeys;
 ACore::ALog logs;
 bool isDebug,isHttpMode;
 QSqlDatabase db;
@@ -22,9 +23,10 @@ int main(int argc, char *argv[])
     serverd = new MainServer();
     settings["Debug"]=false;
     settings["HttpMode"]=true;
-    settings["MinThread"]=3;
-    settings["MaxThread"]=7;
+    settings["MinThread"]=8;
+    settings["MaxThread"]=10;
     settings["AllowSRC"]=3;
+    logs.setfile("serverlog.log");
     //0 - Запрещен
     //1 - Только администраторам(отправка)
     //2 - только отправка(всем)
@@ -56,16 +58,17 @@ int main(int argc, char *argv[])
     isHttpMode = settings["HttpMode"].toBool();
     //Парс стандартного сообщения при подключении клиента
     ACore::RecursionArray arr{
+    {"key",YES_REPLY_INT},
     {"serverVersion",SERVER_VERSION},
     {"aslib",ACORE_VERSION},
     {"qt",QT_VERSION_STR},
     {"serverName",settings["ServerName"].toString()},
     {"DBDriver",settings["MySqlDriver"].toString()},
-    {"info",settings["ServerInfo"].toString()}
-    };
-    serverd->versionarr = arr.toHtml().toUtf8();
+    {"info",settings["ServerInfo"].toString()}}
+    ;
+    serverd->versionarr = arr.toArcan().toUtf8();
 
-    serverd->ClientInConnectText = "<status>OK</status>";
+    serverd->ClientInConnectText = ACore::RecursionArray{{"status","OK"}}.toArcan();
     QString thishost = settings["Host"].toString();
     int thisport = settings["Port"].toInt();
     if(a.arguments().size()>2)
@@ -73,7 +76,11 @@ int main(int argc, char *argv[])
         thishost = a.arguments().value(1);
         thisport = a.arguments().value(2).toInt();
     }
-    if(thisport<= 0 || thisport > 65535) logs << "Warning: port unvalid!";
+    if(thisport<= 0 || thisport > 65535){
+        logs << "Fatal: port "+QString::number(thisport)+" invalid!";
+        delete serverd;
+        return 0;
+    }
     //END
     if(serverd->launch( QHostAddress(thishost )  ,thisport))
     {
@@ -90,8 +97,11 @@ int main(int argc, char *argv[])
         else
             logs << "Mysql connected .. done";
         a.exec();
+        logs.savelog();
+        logs << "Close Database";
+        db.close();
         logs << "Exit";
-
+        logs.savelog();
     }
     delete serverd;
     return 0;

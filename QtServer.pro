@@ -8,12 +8,12 @@ QT       += core sql network
 QT       -= gui
 include(/home/gravit/code/aslib/ACore/ACore.pri)
 include(/home/gravit/code/aslib/ANetwork/ANetwork.pri)
+include(/home/gravit/code/aslib/ASql/ASql.pri)
 #greaterThan(QT_MAJOR_VERSION, 4): QT += widgets
 
 TARGET = QtServer
 TEMPLATE = app
  QMAKE_CXXFLAGS="-std=gnu++11"
-
 SOURCES += main.cpp \
     mainserver.cpp
 

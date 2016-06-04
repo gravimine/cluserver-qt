@@ -18,6 +18,8 @@
 #include <atcpserver.h>
 #include <config.h>
 #include "aipfunc.h"
+#include "asettings.h"
+#include "alog.h"
 extern ACore::ALog logs;
 extern ACore::ASettings settings;
 extern int MinThreadd;
@@ -29,14 +31,14 @@ struct MainClient : public validClient
 {
     QString name;
     QString pass;
-    int id,achived,banned;
+    int id,banned;
     bool Hidden;
     QStringList permissions;
     QString RegIP,init,initV,TimeZone,ShowName,status,email,prefix,colored,real_name;
     QMap<int,int> msgmap;
     QList<int> allowrooms;
+    void clear();
 };
-
 struct Room
 {
     int id;
@@ -50,12 +52,16 @@ class MainServer : public ATCPServer
 public:
     MainServer();
     ~MainServer();
-    void UseCommand(QByteArray hdata, validClient* lClient, ServerThread *thisThread) override;
-    virtual validClient* NewValidClient();
+    void UseCommand(QByteArray hdata, validClient* lClient, ServerThread *thisThread);
     virtual void DelValidClient(validClient* h);
     QTimer* timer;
     QByteArray versionarr;
     QString ClientInConnectText;
+    validClient* NewValidClient()
+    {
+        return (validClient*) new MainClient();
+    }
+
 public slots:
     void MonitorTimer();
     void clientConn(validClient* user);
