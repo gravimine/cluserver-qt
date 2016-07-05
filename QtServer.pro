@@ -15,10 +15,21 @@ TARGET = QtServer
 TEMPLATE = app
  QMAKE_CXXFLAGS="-std=gnu++11"
 SOURCES += main.cpp \
-    mainserver.cpp
+    mainserver.cpp \
+    cmd_test.cpp \
+    cmd_version.cpp \
+    maincommand.cpp \
+    cmd_auth.cpp \
+    commandlauncher.cpp
 
 HEADERS  += \
     mainserver.h \
-    config.h
+    config.h \
+    cmd_test.h \
+    cmdheader.h \
+    cmd_version.h \
+    maincommand.h \
+    cmd_auth.h \
+    commandlauncher.h
 
 FORMS    +=

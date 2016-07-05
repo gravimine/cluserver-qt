@@ -6,6 +6,8 @@
 #include "openssl/md5.h"
 #include <string>
 #include <map>
+#include <iostream>
+#include "commandlauncher.h"
 //#include "apermissions.h"
 AClusterKeys clusterkeys;
 ACore::ALog logs;
@@ -20,6 +22,10 @@ MainServer* serverd;
 int main(int argc, char *argv[])
 {
     QCoreApplication a(argc, argv);
+    bool sn=false;
+    ACore::GetBytes(&sn,1);
+    //printBin<QString>("\n");
+    //return 0;
     serverd = new MainServer();
     settings["Debug"]=false;
     settings["HttpMode"]=true;
@@ -34,7 +40,7 @@ int main(int argc, char *argv[])
     //4 - Прием и отправка
     //5 - Только прием
     ACore::RecursionArray tester;
-    tester.fromArcan("\\[\\]\\\\\\\\\\[\\][true]");
+    tester.fromArcan("test@1[1]beta[tester]integer@I[12]каралоооЛо[ss]");
     qDebug() << tester.print();
     //return 0;
     settings.setAutoSave(true);
@@ -67,7 +73,9 @@ int main(int argc, char *argv[])
     {"info",settings["ServerInfo"].toString()}}
     ;
     serverd->versionarr = arr.toArcan().toUtf8();
-
+    qDebug() << "Инициализация комманд...";
+    CommandLaunch();
+    qDebug() << "Комманды инициализированны. Всего: "+QString::number(serverd->commands.size())+" комманд";
     serverd->ClientInConnectText = ACore::RecursionArray{{"status","OK"}}.toArcan();
     QString thishost = settings["Host"].toString();
     int thisport = settings["Port"].toInt();
@@ -103,6 +111,5 @@ int main(int argc, char *argv[])
         logs << "Exit";
         logs.savelog();
     }
-    delete serverd;
     return 0;
 }

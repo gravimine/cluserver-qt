@@ -47,7 +47,7 @@ extern AClusterKeys clusterkeys;
 
 
 //Не трогать
-#define SEND_CLIENT(n) lClient->numUsingCommands++; sendedCmds++; thisThread->sendToClient(lClient, n)
+#define SEND_CLIENT(n) sendedCmds++; thisThread->sendToClient(lClient, n)
 #define SEND_CLIENT_R(zclient, n) zclient->numUsingCommands++; sendedCmds++; thisThread->sendToClient(zclient, n)
 #define IS_ADMIN (nClient->permissions.contains("ADM"))
 #define IS_MODERATOR (nClient->permissions.contains("MODER"))
