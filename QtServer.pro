@@ -20,7 +20,8 @@ SOURCES += main.cpp \
     cmd_version.cpp \
     maincommand.cpp \
     cmd_auth.cpp \
-    commandlauncher.cpp
+    commandlauncher.cpp \
+    cmd_info.cpp
 
 HEADERS  += \
     mainserver.h \
@@ -30,6 +31,7 @@ HEADERS  += \
     cmd_version.h \
     maincommand.h \
     cmd_auth.h \
-    commandlauncher.h
+    commandlauncher.h \
+    cmd_info.h
 
 FORMS    +=

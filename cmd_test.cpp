@@ -8,6 +8,7 @@ cmd_test::cmd_test()
 
 bool cmd_test::exec(ACore::RecursionArray* arr,MainClient* nClient,ServerThread *thisThread)
 {
+    int x=0;
     SEND_CLIENT(YES_REPLY);
     return true;
 }

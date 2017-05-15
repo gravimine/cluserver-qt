@@ -40,8 +40,13 @@ int main(int argc, char *argv[])
     //4 - Прием и отправка
     //5 - Только прием
     ACore::RecursionArray tester;
-    tester.fromArcan("test@1[1]beta[tester]integer@I[12]каралоооЛо[ss]");
+    QByteArray tex=ACore::IntToByte(17416721);
+    tester.fromArcan("test@1[1]beta[tester]integer@I[12]каралоооЛо[ss]int@T["+ACore::IntToByte(-255222)+"]");
     qDebug() << tester.print();
+    auto gravit = [](std::string a){
+        std::cout << "My favorite is " << a;
+    };
+    gravit("C++");
     //return 0;
     settings.setAutoSave(true);
     settings["Port"]=6592;
@@ -50,10 +55,10 @@ int main(int argc, char *argv[])
     settings["ServerInfo"]=QString("Еще один сервер.");
     settings["MySqlHost"]=QString("localhost");
     settings["MySqlPort"]=3306;
-    settings["MySqlUser"]=QString("Qt5");
+    settings["MySqlUser"]=QString("chat");
     settings["MySqlDriver"]=QString("QMYSQL");
-    settings["MySqlDatabase"]=QString("s1user");
-    settings["MySqlPass"]=QString("passwd");
+    settings["MySqlDatabase"]=QString("chat");
+    settings["MySqlPass"]=QString("FJS8CFhuumsERQbp!");
     settings["MaxCommandsInQuest"]=12;
     settings.LoadSettings();
     qDebug() << settings.print();

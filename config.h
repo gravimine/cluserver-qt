@@ -12,30 +12,27 @@ extern AClusterKeys clusterkeys;
 //NPE
 #define NO_PERMISSIONS_ERROR clusterkeys.NPE
 #define NO_PERMISSIONS_ERROR_INT clusterkeys.iNPE
- //YR
-#define YES_REPLY clusterkeys.ROK
-#define YES_REPLY_INT clusterkeys.iROK
- //BR
-#define BANNED_REPLY clusterkeys.BANE
-#define BANNED_REPLY_INT clusterkeys.iBANE
- //KR
-#define KICK_REPLY clusterkeys.KR
-#define KICK_REPLY_INT clusterkeys.iKR
- //SSR
+//OK
+#define YES_REPLY clusterkeys.OK
+#define YES_REPLY_INT clusterkeys.iOK
+//NO
+#define NO_REPLY clusterkeys.NO
+#define NO_REPLY_INT clusterkeys.iNO
+//Assess Forriben
+#define BANNED_REPLY clusterkeys.ASF
+#define BANNED_REPLY_INT clusterkeys.iASF
+
 #define SERVER_STOP_REPLY clusterkeys.ISE
 #define SERVER_STOP_REPLY_INT clusterkeys.iISE
  //BRR
-#define BAD_REQUEST_REPLY clusterkeys.RBAD
-#define BAD_REQUEST_REPLY_INT clusterkeys.iRBAD
+#define BAD_REQUEST_REPLY clusterkeys.BAD
+#define BAD_REQUEST_REPLY_INT clusterkeys.iBAD
  //NFR
-#define NOT_FOUND_REPLY clusterkeys.NFR
-#define NOT_FOUND_REPLY_INT clusterkeys.iNFR
+#define NOT_FOUND_REPLY clusterkeys.R404
+#define NOT_FOUND_REPLY_INT clusterkeys.iR404
  //SQLE
-#define SQL_ERROR clusterkeys.SQLE
-#define SQL_ERROR_INT clusterkeys.iSQLE
- //AUE
-#define AUTH_ERROR clusterkeys.BAR
-#define AUTH_ERROR_INT clusterkeys.iBAR
+#define SQL_ERROR clusterkeys.ISE
+#define SQL_ERROR_INT clusterkeys.iISE
 //EVR
 #define EVENT_REPLY clusterkeys.EVENTR
 #define EVENT_REPLY_INT clusterkeys.iEVENTR

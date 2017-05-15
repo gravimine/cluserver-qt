@@ -10,6 +10,7 @@ bool cmd_auth::exec(ACore::RecursionArray* arr,MainClient* nClient,ServerThread 
 {
     ACore::RecursionArray ReplyMap = *arr;
     QSqlQuery sqlquery,sql2;
+    //ACore::Sleeper::msleep(10000);
     sqlquery.prepare(QString("SELECT * FROM users WHERE ( name = ? || email = ? ) && pass = md5(?);"));
     QString userlogin = ReplyMap["login"].toString();
     QString userpass = ReplyMap["pass"].toString();
@@ -27,7 +28,7 @@ bool cmd_auth::exec(ACore::RecursionArray* arr,MainClient* nClient,ServerThread 
 
         if(!sqlquery.next())
         {
-            SEND_CLIENT(AUTH_ERROR);
+            SEND_CLIENT(NO_REPLY);
             return false;
         }
         nClient->isAuth=true;
@@ -38,7 +39,7 @@ bool cmd_auth::exec(ACore::RecursionArray* arr,MainClient* nClient,ServerThread 
         nClient->state = AuthState;
         nClient->id=sqlquery.value("id").toInt();
         nClient->init=sqlquery.value("init").toString();
-        nClient->banned=sqlquery.value("baned").toInt();
+        nClient->banned=sqlquery.value("banned").toInt();
         nClient->Hidden=sqlquery.value("hidden").toBool();
         nClient->initV=sqlquery.value("initV").toString();
         nClient->status=sqlquery.value("status").toString();
@@ -78,7 +79,7 @@ bool cmd_auth::exec(ACore::RecursionArray* arr,MainClient* nClient,ServerThread 
                     bantype=sql2.value("unbandata").toString();
                     if(QDateTime::currentDateTime() > QDateTime::fromString(bantype,"yyyy-MM-ddThh:mm:ss"))
                     {
-                        if(!sql2.exec("UPDATE `users` SET `baned` = '0' WHERE `id` = "+QString::number(nClient->id))) {
+                        if(!sql2.exec("UPDATE `users` SET `banned` = '0' WHERE `id` = "+QString::number(nClient->id))) {
                             logs << "[auth]Query stopped: "+sqlquery.lastError().text();
                             SEND_CLIENT(SQL_ERROR);
                             return false;

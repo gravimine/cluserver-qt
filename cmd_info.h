@@ -1,12 +1,12 @@
-#ifndef CMD_AUTH_H
-#define CMD_AUTH_H
+#ifndef CMD_INFO_H
+#define CMD_INFO_H
 #include "mainserver.h"
 
-class cmd_auth : public MainCommand
+class cmd_info : public MainCommand
 {
 public:
-    cmd_auth();
+    cmd_info();
     virtual bool exec(ACore::RecursionArray* arr,MainClient* nClient,ServerThread *thisThread);
 };
 
-#endif // CMD_AUTH_H
+#endif // CMD_INFO_H
